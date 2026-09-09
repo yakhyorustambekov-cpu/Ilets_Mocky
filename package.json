@@ -1,0 +1,15 @@
+{
+  "name": "ielts-mock-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "IELTS Computer-Delivered Mock Testing Platform",
+  "scripts": {
+    "build:client": "npm --prefix client install && npm --prefix client run build",
+    "build:server": "npm --prefix server install && npm --prefix server run db:push && node server/prisma/seed.js && node sample-tests/seed-tests.js",
+    "build": "npm run build:client && npm run build:server",
+    "start": "node server/src/index.js"
+  },
+  "dependencies": {
+    "isomorphic-git": "^1.41.9"
+  }
+}

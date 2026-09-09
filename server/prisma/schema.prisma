@@ -1,0 +1,186 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  password        String
+  firstName       String
+  lastName        String
+  candidateNumber String?
+  role            String   @default("STUDENT") // "STUDENT" | "ADMIN"
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  profile             Profile?
+  testAttempts        TestAttempt[]
+  fullMockAttempts    FullMockAttempt[]
+  testUsages          StudentTestUsage[]
+  randomizationCycles RandomizationCycle[]
+}
+
+model Profile {
+  id         String  @id @default(cuid())
+  userId     String  @unique
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetBand Float?
+  examDate   String?
+  phone      String?
+  bio        String?
+}
+
+model Test {
+  id               String   @id @default(cuid())
+  section          String   // "LISTENING" | "READING" | "WRITING"
+  testNumber       Int
+  title            String
+  description      String?
+  timeLimitMinutes Int      @default(60)
+  status           String   @default("DRAFT") // "DRAFT" | "PUBLISHED" | "ARCHIVED"
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  versions       TestVersion[]
+  attempts       TestAttempt[]
+  usages         StudentTestUsage[]
+  listeningMocks FullMockAttempt[]  @relation("ListeningTest")
+  readingMocks   FullMockAttempt[]  @relation("ReadingTest")
+  writingMocks   FullMockAttempt[]  @relation("WritingTest")
+
+  @@unique([section, testNumber])
+}
+
+model TestVersion {
+  id            String   @id @default(cuid())
+  testId        String
+  test          Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
+  versionNumber Int
+  originalName  String
+  storagePath   String
+  entryFile     String
+  fileType      String   @default("HTML") // "HTML" | "ZIP"
+  fileSize      Int
+  uploadedAt    DateTime @default(now())
+  isActive      Boolean  @default(true)
+
+  attempts       TestAttempt[]
+  files          TestFile[]
+  listeningMocks FullMockAttempt[] @relation("ListeningVersion")
+  readingMocks   FullMockAttempt[] @relation("ReadingVersion")
+  writingMocks   FullMockAttempt[] @relation("WritingVersion")
+
+  @@unique([testId, versionNumber])
+}
+
+model TestFile {
+  id            String      @id @default(cuid())
+  testVersionId String
+  testVersion   TestVersion @relation(fields: [testVersionId], references: [id], onDelete: Cascade)
+  relativePath  String
+  mimeType      String
+  fileSize      Int
+}
+
+model TestAttempt {
+  id                String           @id @default(cuid())
+  userId            String
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  testId            String
+  test              Test             @relation(fields: [testId], references: [id])
+  testVersionId     String
+  testVersion       TestVersion      @relation(fields: [testVersionId], references: [id])
+  section           String           // "LISTENING" | "READING" | "WRITING"
+  status            String           @default("IN_PROGRESS") // "IN_PROGRESS" | "COMPLETED" | "ABANDONED"
+  startedAt         DateTime         @default(now())
+  completedAt       DateTime?
+  timeSpentSeconds  Int?
+  rawScore          Float?
+  maxScore          Float?
+  bandScore         Float?
+  resultData        String?          // JSON results if emitted by test
+  fullMockAttemptId String?
+  fullMockAttempt   FullMockAttempt? @relation(fields: [fullMockAttemptId], references: [id], onDelete: Cascade)
+  results           Result[]
+}
+
+model FullMockAttempt {
+  id                 String    @id @default(cuid())
+  userId             String
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mockNumber         Int
+  listeningTestId    String
+  listeningTest      Test      @relation("ListeningTest", fields: [listeningTestId], references: [id])
+  listeningVersionId String
+  listeningVersion   TestVersion @relation("ListeningVersion", fields: [listeningVersionId], references: [id])
+  readingTestId      String
+  readingTest        Test      @relation("ReadingTest", fields: [readingTestId], references: [id])
+  readingVersionId   String
+  readingVersion     TestVersion @relation("ReadingVersion", fields: [readingVersionId], references: [id])
+  writingTestId      String
+  writingTest        Test      @relation("WritingTest", fields: [writingTestId], references: [id])
+  writingVersionId   String
+  writingVersion     TestVersion @relation("WritingVersion", fields: [writingVersionId], references: [id])
+  currentSection     String    @default("LISTENING") // "LISTENING" | "READING" | "WRITING" | "COMPLETED"
+  status             String    @default("IN_PROGRESS") // "IN_PROGRESS" | "COMPLETED" | "ABANDONED"
+  startedAt          DateTime  @default(now())
+  completedAt        DateTime?
+
+  testAttempts TestAttempt[]
+  usages       StudentTestUsage[]
+  results      Result[]
+
+  @@unique([userId, mockNumber])
+}
+
+model StudentTestUsage {
+  id                String           @id @default(cuid())
+  userId            String
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  testId            String
+  test              Test             @relation(fields: [testId], references: [id])
+  section           String
+  cycle             Int              @default(1)
+  usedAt            DateTime         @default(now())
+  fullMockAttemptId String?
+  fullMockAttempt   FullMockAttempt? @relation(fields: [fullMockAttemptId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, testId, cycle])
+}
+
+model RandomizationCycle {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  section      String   // "LISTENING" | "READING" | "WRITING"
+  currentCycle Int      @default(1)
+  lastResetAt  DateTime @default(now())
+
+  @@unique([userId, section])
+}
+
+model Result {
+  id                String           @id @default(cuid())
+  testAttemptId     String?
+  testAttempt       TestAttempt?     @relation(fields: [testAttemptId], references: [id], onDelete: Cascade)
+  fullMockAttemptId String?
+  fullMockAttempt   FullMockAttempt? @relation(fields: [fullMockAttemptId], references: [id], onDelete: Cascade)
+  section           String
+  rawScore          Float?
+  maxScore          Float?
+  bandScore         Float?
+  feedback          String?
+  detailsJson       String?
+  createdAt         DateTime         @default(now())
+}
+
+model Setting {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+}

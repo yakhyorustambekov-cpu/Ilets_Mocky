@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>IELTS Academic Writing - Test 2</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 24px; background: #fdfefe; }
+    .box { max-width: 900px; margin: 0 auto; background: #ffffff; border: 1px solid #d1d5db; border-radius: 6px; padding: 20px; margin-bottom: 20px; }
+    .task-title { font-size: 16px; font-weight: bold; color: #111827; }
+    .instruction { background: #f3f4f6; border-left: 4px solid #4b5563; padding: 12px 16px; margin: 12px 0; font-size: 14px; }
+    textarea { width: 100%; height: 180px; box-sizing: border-box; padding: 10px; border: 1px solid #d1d5db; border-radius: 4px; font-family: inherit; font-size: 14px; }
+    .word-count { font-size: 12px; color: #6b7280; margin-top: 4px; }
+    .submit-btn { background: #1f2937; color: white; border: none; padding: 10px 20px; border-radius: 4px; font-weight: bold; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div class="task-title">WRITING TASK 1</div>
+    <div class="instruction">
+      <strong>The diagram illustrates the process of producing recycled paper.</strong><br>
+      Write a report describing the stages of collection, pulping, de-inking, and pressing. Write at least 150 words.
+    </div>
+    <textarea id="w2t1" placeholder="Write Task 1 report..."></textarea>
+    <div class="word-count">Words: <span id="c1">0</span></div>
+  </div>
+
+  <div class="box">
+    <div class="task-title">WRITING TASK 2</div>
+    <div class="instruction">
+      <strong>Some people think that university education should be free for all students. To what extent do you agree or disagree?</strong><br>
+      Write at least 250 words.
+    </div>
+    <textarea id="w2t2" placeholder="Write Task 2 essay..."></textarea>
+    <div class="word-count">Words: <span id="c2">0</span></div>
+    <div style="text-align:right; margin-top:16px;">
+      <button class="submit-btn" id="w2sub">Submit Writing Test</button>
+    </div>
+  </div>
+
+  <script>
+    function setup(id, countId) {
+      const area = document.getElementById(id);
+      const span = document.getElementById(countId);
+      area.addEventListener('input', function() {
+        const words = area.value.trim() ? area.value.trim().split(/\s+/).length : 0;
+        span.textContent = words;
+      });
+    }
+    setup('w2t1', 'c1');
+    setup('w2t2', 'c2');
+
+    document.getElementById('w2sub').addEventListener('click', function() {
+      if (window.parent) {
+        window.parent.postMessage({
+          type: 'IELTS_TEST_COMPLETE',
+          section: 'WRITING',
+          bandScore: 7.5,
+          resultData: { testNumber: 2 }
+        }, '*');
+      }
+      alert('Writing Test 2 submitted!');
+    });
+  </script>
+</body>
+</html>

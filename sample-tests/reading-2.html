@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>IELTS Academic Reading - Test 2</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; background: #f8fafc; }
+    .split { display: flex; height: 100vh; }
+    .passage { flex: 1; padding: 24px 30px; overflow-y: auto; background: #ffffff; border-right: 2px solid #e2e8f0; line-height: 1.65; }
+    .questions { flex: 1; padding: 24px 30px; overflow-y: auto; background: #f8fafc; }
+    .card { background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 14px 18px; margin-bottom: 14px; }
+    .btn { background: #0d9488; color: white; border: none; padding: 10px 20px; border-radius: 4px; font-weight: bold; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="split">
+    <div class="passage">
+      <h2>READING PASSAGE 2</h2>
+      <h3>Biomimicry in Modern Civil Engineering</h3>
+      <p>Biomimicry is the design and production of materials, structures, and systems that are modeled on biological entities and processes. From self-cooling architectural complexes modeled on termite mounds to ultra-strong lightweight polymers derived from spider silk, nature continues to offer time-tested blueprints.</p>
+      <p>The Eastgate Centre in Harare, Zimbabwe, serves as an archetype of passive climate architecture. Architect Mick Pearce collaborated with engineers to mimic the self-cooling mounds of Macrotermes termites, reducing air-conditioning energy consumption by over 90% compared to traditional buildings of similar volume.</p>
+    </div>
+    <div class="questions">
+      <h3>Questions 1-3: Matching Information</h3>
+      <div class="card">
+        <p><strong>1.</strong> The Eastgate Centre achieved energy savings of more than:</p>
+        <label><input type="radio" name="q1" value="A"> A) 50%</label><br>
+        <label><input type="radio" name="q1" value="B"> B) 75%</label><br>
+        <label><input type="radio" name="q1" value="C"> C) 90%</label>
+      </div>
+      <div class="card">
+        <p><strong>2.</strong> The primary termite genus studied for thermal dynamics was:</p>
+        <label><input type="radio" name="q2" value="A"> A) Macrotermes</label><br>
+        <label><input type="radio" name="q2" value="B"> B) Reticulitermes</label><br>
+        <label><input type="radio" name="q2" value="C"> C) Cryptotermes</label>
+      </div>
+      <button class="btn" id="subBtn2">Finish Section</button>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('subBtn2').addEventListener('click', function() {
+      if (window.parent) {
+        window.parent.postMessage({
+          type: 'IELTS_TEST_COMPLETE',
+          section: 'READING',
+          rawScore: 35,
+          maxScore: 40,
+          bandScore: 8.0,
+          resultData: { testNumber: 2 }
+        }, '*');
+      }
+      alert('Reading Test 2 submitted successfully! Score: 35/40 (Band 8.0)');
+    });
+  </script>
+</body>
+</html>
