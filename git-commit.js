@@ -49,7 +49,17 @@ async function run() {
     await git.add({ fs, dir, filepath });
   }
 
-  console.log('Committing staged files...');
+  // Check for deleted files to stage removals
+  const matrix = await git.statusMatrix({ fs, dir });
+  for (const [filepath, head, workdir, stage] of matrix) {
+    if (head === 1 && workdir === 0) {
+      console.log('Staging removal:', filepath);
+      await git.remove({ fs, dir, filepath });
+    }
+  }
+
+  const message = process.argv[2] || 'Switch Prisma to PostgreSQL for Render';
+  console.log('Committing staged files with message:', message);
   const sha = await git.commit({
     fs,
     dir,
@@ -57,7 +67,7 @@ async function run() {
       name: 'IELTS Administrator',
       email: 'admin@ielts.com',
     },
-    message: 'feat: complete production-quality IELTS computer-delivered mock platform',
+    message: message,
   });
 
   console.log('Successfully created Git commit:', sha);

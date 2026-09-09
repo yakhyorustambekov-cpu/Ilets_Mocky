@@ -24,9 +24,11 @@ if (!fs.existsSync(serverDir)) {
 }
 
 const serverEnvPath = path.join(serverDir, '.env');
-const envContent = 'DATABASE_URL="file:./dev.db"\nJWT_SECRET="ielts-cdi-supersecret-production-key"\n';
+const dbUrl = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/postgres';
+const jwtSecret = process.env.JWT_SECRET || 'ielts-cdi-supersecret-production-key';
+const envContent = `DATABASE_URL="${dbUrl}"\nJWT_SECRET="${jwtSecret}"\nPORT=3001\nUPLOAD_DIR="./uploads"\n`;
 
-if (!fs.existsSync(serverEnvPath)) {
+if (!fs.existsSync(serverEnvPath) || process.env.DATABASE_URL) {
   fs.writeFileSync(serverEnvPath, envContent, 'utf8');
-  console.log('Created single canonical environment file at:', serverEnvPath);
+  console.log('Synchronized environment file at:', serverEnvPath);
 }
