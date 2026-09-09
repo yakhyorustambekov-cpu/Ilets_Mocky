@@ -1,25 +1,32 @@
 const fs = require('fs');
 const path = require('path');
 
-const envContent = 'DATABASE_URL="file:./dev.db"\nJWT_SECRET="ielts-cdi-supersecret-production-key"\n';
-
-const targetDirs = [
-  path.resolve(__dirname, 'server'),
-  path.resolve(__dirname, 'server', 'prisma'),
-  path.resolve(__dirname),
+// Prisma throws an error if multiple .env files exist in both .env and prisma/.env
+// We remove any extra .env files to ensure zero conflicts
+const conflictingPaths = [
+  path.resolve(__dirname, 'server', 'prisma', '.env'),
+  path.resolve(__dirname, '.env'),
 ];
 
-for (const dir of targetDirs) {
+for (const conflict of conflictingPaths) {
   try {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+    if (fs.existsSync(conflict)) {
+      fs.unlinkSync(conflict);
+      console.log('Cleaned up conflicting env file:', conflict);
     }
-    const envFile = path.join(dir, '.env');
-    if (!fs.existsSync(envFile)) {
-      fs.writeFileSync(envFile, envContent, 'utf8');
-      console.log('Auto-generated environment file at:', envFile);
-    }
-  } catch (err) {
-    console.warn('Could not write env file:', dir, err.message);
-  }
+  } catch (_) {}
+}
+
+// Ensure ONLY server/.env exists as the single source of truth
+const serverDir = path.resolve(__dirname, 'server');
+if (!fs.existsSync(serverDir)) {
+  fs.mkdirSync(serverDir, { recursive: true });
+}
+
+const serverEnvPath = path.join(serverDir, '.env');
+const envContent = 'DATABASE_URL="file:./dev.db"\nJWT_SECRET="ielts-cdi-supersecret-production-key"\n';
+
+if (!fs.existsSync(serverEnvPath)) {
+  fs.writeFileSync(serverEnvPath, envContent, 'utf8');
+  console.log('Created single canonical environment file at:', serverEnvPath);
 }
