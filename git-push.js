@@ -34,9 +34,12 @@ async function pushRepo(remoteUrl, token = null) {
     force: true,
     onAuth: () => {
       if (token) {
-        return { username: token, password: '' };
+        return { username: 'yakhyorustambekov-cpu', password: token };
       }
       return {};
+    },
+    headers: {
+      'User-Agent': 'git/isomorphic-git',
     },
   });
 
