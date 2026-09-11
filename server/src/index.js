@@ -7,6 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const mime = require('./utils/mime');
 const prisma = require('./db');
+const testStore = require('./utils/testStore');
 
 const authRoutes = require('./routes/auth');
 const testRoutes = require('./routes/tests');
@@ -74,9 +75,14 @@ const handleTestContent = async (req, res, next) => {
     const { versionId } = req.params;
     const requestedPath = req.params[0] || '';
 
-    const version = await prisma.testVersion.findUnique({
-      where: { id: versionId },
-    });
+    let version = testStore.findVersionById(versionId);
+    if (!version) {
+      try {
+        version = await prisma.testVersion.findUnique({
+          where: { id: versionId },
+        });
+      } catch (_) {}
+    }
 
     if (!version) {
       return res.status(404).json({ error: 'Test version not found' });

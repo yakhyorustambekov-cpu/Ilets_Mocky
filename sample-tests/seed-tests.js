@@ -2,9 +2,10 @@ const fs = require('fs');
 const path = require('path');
 const prisma = require('../server/src/db');
 const { processTestUpload } = require('../server/src/utils/fileStorage');
+const testStore = require('../server/src/utils/testStore');
 
 async function seedSampleTests() {
-  console.log('Seeding 6 sample tests...');
+  console.log('Seeding sample tests into test.json...');
 
   const testsToSeed = [
     {
@@ -58,47 +59,9 @@ async function seedSampleTests() {
   ];
 
   for (const t of testsToSeed) {
-    // Check if test exists
-    let test = await prisma.test.findUnique({
-      where: {
-        section_testNumber: {
-          section: t.section,
-          testNumber: t.testNumber,
-        },
-      },
-    });
+    let existingTest = testStore.findTestBySectionAndNumber(t.section, t.testNumber);
 
-    if (!test) {
-      test = await prisma.test.create({
-        data: {
-          section: t.section,
-          testNumber: t.testNumber,
-          title: t.title,
-          description: t.description,
-          timeLimitMinutes: t.timeLimitMinutes,
-          status: 'PUBLISHED',
-        },
-      });
-      console.log(`Created test: [${t.section} ${t.testNumber}] ${t.title}`);
-    } else {
-      // Ensure it's published
-      await prisma.test.update({
-        where: { id: test.id },
-        data: { status: 'PUBLISHED' },
-      });
-    }
-
-    // Check if version 1 exists
-    const existingVersion = await prisma.testVersion.findUnique({
-      where: {
-        testId_versionNumber: {
-          testId: test.id,
-          versionNumber: 1,
-        },
-      },
-    });
-
-    if (!existingVersion) {
+    if (!existingTest) {
       const srcFile = path.join(__dirname, t.fileName);
       const tempCopy = path.join(__dirname, `temp_${t.fileName}`);
       fs.copyFileSync(srcFile, tempCopy);
@@ -109,34 +72,33 @@ async function seedSampleTests() {
         size: fs.statSync(srcFile).size,
       };
 
-      const uploadResult = await processTestUpload(mockMulterFile, test.id, 1);
+      const crypto = require('crypto');
+      const testId = `test_${Date.now().toString(36)}_${crypto.randomBytes(3).toString('hex')}`;
+      const uploadResult = await processTestUpload(mockMulterFile, testId, 1);
 
-      await prisma.testVersion.create({
-        data: {
-          testId: test.id,
-          versionNumber: 1,
-          originalName: uploadResult.originalName,
-          storagePath: uploadResult.storagePath,
-          entryFile: uploadResult.entryFile,
-          fileType: uploadResult.fileType,
-          fileSize: uploadResult.fileSize,
-          isActive: true,
-          files: {
-            create: uploadResult.filesList.map(f => ({
-              relativePath: f.relativePath,
-              mimeType: f.mimeType,
-              fileSize: f.fileSize,
-            })),
-          },
-        },
-      });
-      console.log(`Installed version 1 for test [${t.section} ${t.testNumber}]`);
+      const created = testStore.createTest({
+        id: testId,
+        section: t.section,
+        testNumber: t.testNumber,
+        title: t.title,
+        description: t.description,
+        timeLimitMinutes: t.timeLimitMinutes,
+        status: 'PUBLISHED',
+      }, uploadResult);
+
+      console.log(`Installed test into test.json: [${t.section} ${t.testNumber}] ${t.title}`);
+    } else {
+      console.log(`Test already in test.json: [${t.section} ${t.testNumber}] ${existingTest.title}`);
     }
   }
 
-  console.log('Sample tests seeding completed successfully!');
+  console.log('Sample tests seeding into test.json completed successfully!');
 }
 
 seedSampleTests()
   .catch(console.error)
-  .finally(() => prisma.$disconnect());
+  .finally(async () => {
+    try {
+      await prisma.$disconnect();
+    } catch (_) {}
+  });

@@ -4,12 +4,16 @@
   "private": true,
   "description": "IELTS Computer-Delivered Mock Testing Platform",
   "scripts": {
+    "prisma:generate": "npx prisma generate",
+    "prisma:push": "npx prisma db push",
     "build:client": "npm --prefix client install --include=dev && npm --prefix client run build",
     "build:server": "node prepare-env.js && npm --prefix server install --include=dev && npm --prefix server run db:push && node server/prisma/seed.js && node sample-tests/seed-tests.js",
     "build": "node prepare-env.js && npm run build:client && npm run build:server",
     "start": "node prepare-env.js && node server/src/index.js"
   },
   "dependencies": {
-    "isomorphic-git": "^1.41.9"
+    "@prisma/client": "^5.7.0",
+    "isomorphic-git": "^1.41.9",
+    "prisma": "^5.7.0"
   }
 }

@@ -6,6 +6,7 @@ const fs = require('fs');
 const prisma = require('../db');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { processTestUpload } = require('../utils/fileStorage');
+const testStore = require('../utils/testStore');
 
 const router = express.Router();
 
@@ -32,62 +33,66 @@ const upload = multer({
 // GET /api/admin/dashboard - Overview statistics
 router.get('/dashboard', async (req, res, next) => {
   try {
-    const [
-      totalStudents,
-      totalTests,
-      publishedTests,
-      draftTests,
-      archivedTests,
-      listeningTests,
-      readingTests,
-      writingTests,
-      totalAttempts,
-      completedAttempts,
-      totalFullMocks,
-      completedFullMocks,
-      recentAttempts,
-    ] = await Promise.all([
-      prisma.user.count({ where: { role: 'STUDENT' } }),
-      prisma.test.count(),
-      prisma.test.count({ where: { status: 'PUBLISHED' } }),
-      prisma.test.count({ where: { status: 'DRAFT' } }),
-      prisma.test.count({ where: { status: 'ARCHIVED' } }),
-      prisma.test.count({ where: { section: 'LISTENING', status: 'PUBLISHED' } }),
-      prisma.test.count({ where: { section: 'READING', status: 'PUBLISHED' } }),
-      prisma.test.count({ where: { section: 'WRITING', status: 'PUBLISHED' } }),
-      prisma.testAttempt.count(),
-      prisma.testAttempt.count({ where: { status: 'COMPLETED' } }),
-      prisma.fullMockAttempt.count(),
-      prisma.fullMockAttempt.count({ where: { status: 'COMPLETED' } }),
-      prisma.testAttempt.findMany({
-        take: 10,
-        orderBy: { startedAt: 'desc' },
-        include: {
-          user: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
-              candidateNumber: true,
+    const allTests = testStore.getAllTests();
+    const totalTests = allTests.length;
+    const publishedTests = allTests.filter(t => t.status === 'PUBLISHED').length;
+    const draftTests = allTests.filter(t => t.status === 'DRAFT').length;
+    const archivedTests = allTests.filter(t => t.status === 'ARCHIVED').length;
+    const listeningTests = allTests.filter(t => t.section === 'LISTENING' && t.status === 'PUBLISHED').length;
+    const readingTests = allTests.filter(t => t.section === 'READING' && t.status === 'PUBLISHED').length;
+    const writingTests = allTests.filter(t => t.section === 'WRITING' && t.status === 'PUBLISHED').length;
+
+    let totalStudents = 0;
+    let totalAttempts = 0;
+    let completedAttempts = 0;
+    let totalFullMocks = 0;
+    let completedFullMocks = 0;
+    let recentAttempts = [];
+
+    try {
+      [
+        totalStudents,
+        totalAttempts,
+        completedAttempts,
+        totalFullMocks,
+        completedFullMocks,
+        recentAttempts,
+      ] = await Promise.all([
+        prisma.user.count({ where: { role: 'STUDENT' } }),
+        prisma.testAttempt.count(),
+        prisma.testAttempt.count({ where: { status: 'COMPLETED' } }),
+        prisma.fullMockAttempt.count(),
+        prisma.fullMockAttempt.count({ where: { status: 'COMPLETED' } }),
+        prisma.testAttempt.findMany({
+          take: 10,
+          orderBy: { startedAt: 'desc' },
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                candidateNumber: true,
+              },
             },
           },
-          test: {
-            select: {
-              id: true,
-              title: true,
-              testNumber: true,
-              section: true,
-            },
-          },
-          testVersion: {
-            select: {
-              versionNumber: true,
-            },
-          },
-        },
-      }),
-    ]);
+        }),
+      ]);
+    } catch (_) {}
+
+    const enrichedRecentAttempts = (recentAttempts || []).map(att => {
+      const storedTest = testStore.getTestById(att.testId);
+      return {
+        ...att,
+        test: storedTest ? {
+          id: storedTest.id,
+          title: storedTest.title,
+          testNumber: storedTest.testNumber,
+          section: storedTest.section,
+        } : (att.test || null),
+      };
+    });
 
     res.json({
       stats: {
@@ -110,58 +115,48 @@ router.get('/dashboard', async (req, res, next) => {
           completed: completedFullMocks,
         },
       },
-      recentAttempts,
+      recentAttempts: enrichedRecentAttempts,
     });
   } catch (error) {
     next(error);
   }
 });
 
-// GET /api/admin/tests - List all tests with filtering
+// GET /api/admin/tests - List all tests with filtering from test.json
 router.get('/tests', async (req, res, next) => {
   try {
     const { section, status, search } = req.query;
 
-    const where = {};
-    if (section) where.section = section.toUpperCase();
-    if (status) where.status = status.toUpperCase();
-    if (search) {
-      where.OR = [
-        { title: { contains: search } },
-        { description: { contains: search } },
-      ];
-    }
+    const tests = testStore.getAllTests({ section, status, search });
 
-    const tests = await prisma.test.findMany({
-      where,
-      orderBy: [
-        { section: 'asc' },
-        { testNumber: 'asc' },
-      ],
-      include: {
-        versions: {
-          orderBy: { versionNumber: 'desc' },
-        },
-        _count: {
-          select: { attempts: true },
-        },
-      },
+    let attemptsCountMap = {};
+    try {
+      const counts = await prisma.testAttempt.groupBy({
+        by: ['testId'],
+        _count: { id: true },
+      });
+      counts.forEach(c => {
+        attemptsCountMap[c.testId] = c._count.id;
+      });
+    } catch (_) {}
+
+    const formatted = tests.map(t => {
+      const versions = t.versions || [];
+      return {
+        id: t.id,
+        section: t.section,
+        testNumber: t.testNumber,
+        title: t.title,
+        description: t.description,
+        timeLimitMinutes: t.timeLimitMinutes,
+        status: t.status,
+        createdAt: t.createdAt,
+        updatedAt: t.updatedAt,
+        activeVersion: versions.find(v => v.isActive) || versions[0] || null,
+        allVersions: versions,
+        attemptsCount: attemptsCountMap[t.id] || 0,
+      };
     });
-
-    const formatted = tests.map(t => ({
-      id: t.id,
-      section: t.section,
-      testNumber: t.testNumber,
-      title: t.title,
-      description: t.description,
-      timeLimitMinutes: t.timeLimitMinutes,
-      status: t.status,
-      createdAt: t.createdAt,
-      updatedAt: t.updatedAt,
-      activeVersion: t.versions.find(v => v.isActive) || t.versions[0] || null,
-      allVersions: t.versions,
-      attemptsCount: t._count.attempts,
-    }));
 
     res.json(formatted);
   } catch (error) {
@@ -169,7 +164,7 @@ router.get('/tests', async (req, res, next) => {
   }
 });
 
-// POST /api/admin/tests - Create a new test with uploaded file
+// POST /api/admin/tests - Create a new test with uploaded file, saved directly to test.json
 router.post('/tests', upload.single('file'), async (req, res, next) => {
   try {
     const { section, testNumber, title, description, timeLimitMinutes, status } = req.body;
@@ -179,8 +174,9 @@ router.post('/tests', upload.single('file'), async (req, res, next) => {
     }
 
     if (!section || !testNumber || !title) {
-      // Clean up uploaded file
-      fs.unlinkSync(req.file.path);
+      if (fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
       return res.status(400).json({ error: 'section, testNumber, and title are required' });
     }
 
@@ -189,66 +185,35 @@ router.post('/tests', upload.single('file'), async (req, res, next) => {
     const parsedDuration = timeLimitMinutes ? parseInt(timeLimitMinutes, 10) : (normalizedSection === 'LISTENING' ? 32 : 60);
     const testStatus = status ? status.toUpperCase() : 'DRAFT';
 
-    // Check unique [section, testNumber]
-    const existing = await prisma.test.findUnique({
-      where: {
-        section_testNumber: {
-          section: normalizedSection,
-          testNumber: parsedNumber,
-        },
-      },
-    });
-
+    // Check unique [section, testNumber] from test.json
+    const existing = testStore.findTestBySectionAndNumber(normalizedSection, parsedNumber);
     if (existing) {
-      fs.unlinkSync(req.file.path);
+      if (fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
       return res.status(409).json({ error: `A test for ${normalizedSection} with number ${parsedNumber} already exists.` });
     }
 
-    // Create test record first to get test.id
-    const newTest = await prisma.test.create({
-      data: {
-        section: normalizedSection,
-        testNumber: parsedNumber,
-        title,
-        description: description || null,
-        timeLimitMinutes: parsedDuration,
-        status: testStatus,
-      },
-    });
-
-    // Process upload into destination directory
+    // Generate test ID and process upload
+    const crypto = require('crypto');
+    const testId = `test_${Date.now().toString(36)}_${crypto.randomBytes(3).toString('hex')}`;
     let uploadResult;
     try {
-      uploadResult = await processTestUpload(req.file, newTest.id, 1);
+      uploadResult = await processTestUpload(req.file, testId, 1);
     } catch (uploadError) {
-      // Rollback created test
-      await prisma.test.delete({ where: { id: newTest.id } });
       return res.status(400).json({ error: uploadError.message });
     }
 
-    // Create TestVersion and TestFile records
-    const version = await prisma.testVersion.create({
-      data: {
-        testId: newTest.id,
-        versionNumber: 1,
-        originalName: uploadResult.originalName,
-        storagePath: uploadResult.storagePath,
-        entryFile: uploadResult.entryFile,
-        fileType: uploadResult.fileType,
-        fileSize: uploadResult.fileSize,
-        isActive: true,
-        files: {
-          create: uploadResult.filesList.map(f => ({
-            relativePath: f.relativePath,
-            mimeType: f.mimeType,
-            fileSize: f.fileSize,
-          })),
-        },
-      },
-      include: {
-        files: true,
-      },
-    });
+    // Save test and version directly into test.json
+    const { test: newTest, version } = testStore.createTest({
+      id: testId,
+      section: normalizedSection,
+      testNumber: parsedNumber,
+      title,
+      description: description || null,
+      timeLimitMinutes: parsedDuration,
+      status: testStatus,
+    }, uploadResult);
 
     res.status(201).json({
       test: newTest,
@@ -260,64 +225,58 @@ router.post('/tests', upload.single('file'), async (req, res, next) => {
   }
 });
 
-// GET /api/admin/tests/:id - Get test details
+// GET /api/admin/tests/:id - Get test details from test.json
 router.get('/tests/:id', async (req, res, next) => {
   try {
-    const test = await prisma.test.findUnique({
-      where: { id: req.params.id },
-      include: {
-        versions: {
-          orderBy: { versionNumber: 'desc' },
-          include: { files: true },
-        },
-        attempts: {
-          orderBy: { startedAt: 'desc' },
-          take: 20,
-          include: {
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-                candidateNumber: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
+    const test = testStore.getTestById(req.params.id);
     if (!test) {
       return res.status(404).json({ error: 'Test not found' });
     }
 
-    res.json(test);
+    let attempts = [];
+    try {
+      attempts = await prisma.testAttempt.findMany({
+        where: { testId: req.params.id },
+        orderBy: { startedAt: 'desc' },
+        take: 20,
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              candidateNumber: true,
+            },
+          },
+        },
+      });
+    } catch (_) {}
+
+    res.json({
+      ...test,
+      attempts,
+    });
   } catch (error) {
     next(error);
   }
 });
 
-// PUT /api/admin/tests/:id - Update test metadata and status
+// PUT /api/admin/tests/:id - Update test metadata and status in test.json
 router.put('/tests/:id', async (req, res, next) => {
   try {
     const { title, description, timeLimitMinutes, status, testNumber } = req.body;
+    const existing = testStore.getTestById(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ error: 'Test not found' });
+    }
 
-    const data = {};
-    if (title) data.title = title;
-    if (description !== undefined) data.description = description;
-    if (timeLimitMinutes) data.timeLimitMinutes = parseInt(timeLimitMinutes, 10);
-    if (status) data.status = status.toUpperCase();
-    if (testNumber) data.testNumber = parseInt(testNumber, 10);
-
-    const updated = await prisma.test.update({
-      where: { id: req.params.id },
-      data,
-      include: {
-        versions: {
-          where: { isActive: true },
-        },
-      },
+    const updated = testStore.updateTest(req.params.id, {
+      title,
+      description,
+      timeLimitMinutes,
+      status,
+      testNumber,
     });
 
     res.json(updated);
@@ -326,7 +285,7 @@ router.put('/tests/:id', async (req, res, next) => {
   }
 });
 
-// POST /api/admin/tests/:id/version - Replace test / upload new version (Requirement 9 & 12)
+// POST /api/admin/tests/:id/version - Replace test / upload new version into test.json
 router.post('/tests/:id/version', upload.single('file'), async (req, res, next) => {
   try {
     const testId = req.params.id;
@@ -335,53 +294,24 @@ router.post('/tests/:id/version', upload.single('file'), async (req, res, next) 
       return res.status(400).json({ error: 'Please upload an HTML or ZIP test file' });
     }
 
-    const test = await prisma.test.findUnique({
-      where: { id: testId },
-      include: {
-        versions: {
-          orderBy: { versionNumber: 'desc' },
-        },
-      },
-    });
-
+    const test = testStore.getTestById(testId);
     if (!test) {
-      fs.unlinkSync(req.file.path);
+      if (fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
       return res.status(404).json({ error: 'Test not found' });
     }
 
-    const nextVersionNumber = test.versions.length > 0 ? test.versions[0].versionNumber + 1 : 1;
+    const versions = test.versions || [];
+    const nextVersionNumber = versions.length > 0 
+      ? Math.max(...versions.map(v => v.versionNumber || 0)) + 1 
+      : 1;
 
     // Process file into version directory
     const uploadResult = await processTestUpload(req.file, test.id, nextVersionNumber);
 
-    // In a transaction: deactivate older versions and insert new active version
-    const newVersion = await prisma.$transaction(async (tx) => {
-      await tx.testVersion.updateMany({
-        where: { testId },
-        data: { isActive: false },
-      });
-
-      return tx.testVersion.create({
-        data: {
-          testId,
-          versionNumber: nextVersionNumber,
-          originalName: uploadResult.originalName,
-          storagePath: uploadResult.storagePath,
-          entryFile: uploadResult.entryFile,
-          fileType: uploadResult.fileType,
-          fileSize: uploadResult.fileSize,
-          isActive: true,
-          files: {
-            create: uploadResult.filesList.map(f => ({
-              relativePath: f.relativePath,
-              mimeType: f.mimeType,
-              fileSize: f.fileSize,
-            })),
-          },
-        },
-        include: { files: true },
-      });
-    });
+    // Save new version to test.json
+    const newVersion = testStore.addTestVersion(testId, uploadResult);
 
     res.status(201).json({
       message: `Version ${nextVersionNumber} successfully uploaded and set active`,
@@ -393,47 +323,39 @@ router.post('/tests/:id/version', upload.single('file'), async (req, res, next) 
   }
 });
 
-// DELETE /api/admin/tests/:id - Archive or delete test
+// DELETE /api/admin/tests/:id - Archive or delete test from test.json
 router.delete('/tests/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
-
-    // Check if test has attempts
-    const attemptsCount = await prisma.testAttempt.count({
-      where: { testId: id },
-    });
-
-    if (attemptsCount > 0) {
-      // Archive instead of deleting to preserve historical attempts integrity
-      const archived = await prisma.test.update({
-        where: { id },
-        data: { status: 'ARCHIVED' },
-      });
-      return res.json({
-        message: 'Test has historical attempts. It has been ARCHIVED to preserve history.',
-        test: archived,
-      });
-    }
-
-    // If no attempts, clean up files and delete
-    const test = await prisma.test.findUnique({
-      where: { id },
-      include: { versions: true },
-    });
-
+    const test = testStore.getTestById(id);
     if (!test) {
       return res.status(404).json({ error: 'Test not found' });
     }
 
-    // Remove file directories
+    // Check if test has attempts
+    let attemptsCount = 0;
+    try {
+      attemptsCount = await prisma.testAttempt.count({
+        where: { testId: id },
+      });
+    } catch (_) {}
+
+    if (attemptsCount > 0) {
+      const result = testStore.deleteOrArchiveTest(id, true);
+      return res.json({
+        message: 'Test has historical attempts. It has been ARCHIVED to preserve history.',
+        test: result.test,
+      });
+    }
+
+    // If no attempts, clean up files and delete from test.json
     const testBaseDir = path.resolve(process.env.UPLOAD_DIR || './uploads', 'tests', id);
     if (fs.existsSync(testBaseDir)) {
       fs.rmSync(testBaseDir, { recursive: true, force: true });
     }
 
-    await prisma.test.delete({ where: { id } });
-
-    res.json({ message: 'Test completely deleted' });
+    const result = testStore.deleteOrArchiveTest(id, false);
+    res.json({ message: 'Test completely deleted', test: result.test });
   } catch (error) {
     next(error);
   }

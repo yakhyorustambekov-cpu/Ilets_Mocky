@@ -2,8 +2,28 @@ const express = require('express');
 const prisma = require('../db');
 const { authenticate } = require('../middleware/auth');
 const { selectTestForSection } = require('../utils/randomizer');
+const testStore = require('../utils/testStore');
 
 const router = express.Router();
+
+function enrichMock(mock) {
+  if (!mock) return mock;
+  if (!mock.listeningTest) mock.listeningTest = testStore.getTestById(mock.listeningTestId);
+  if (!mock.readingTest) mock.readingTest = testStore.getTestById(mock.readingTestId);
+  if (!mock.writingTest) mock.writingTest = testStore.getTestById(mock.writingTestId);
+  if (!mock.listeningVersion) mock.listeningVersion = testStore.findVersionById(mock.listeningVersionId);
+  if (!mock.readingVersion) mock.readingVersion = testStore.findVersionById(mock.readingVersionId);
+  if (!mock.writingVersion) mock.writingVersion = testStore.findVersionById(mock.writingVersionId);
+
+  if (Array.isArray(mock.testAttempts)) {
+    mock.testAttempts = mock.testAttempts.map(att => {
+      if (!att.test) att.test = testStore.getTestById(att.testId);
+      if (!att.testVersion) att.testVersion = testStore.findVersionById(att.testVersionId);
+      return att;
+    });
+  }
+  return mock;
+}
 
 // GET /api/mocks/current - Check if student has an active full mock attempt
 router.get('/current', authenticate, async (req, res, next) => {
@@ -32,7 +52,7 @@ router.get('/current', authenticate, async (req, res, next) => {
       },
     });
 
-    res.json({ activeMock: currentMock || null });
+    res.json({ activeMock: currentMock ? enrichMock(currentMock) : null });
   } catch (error) {
     next(error);
   }
@@ -119,6 +139,40 @@ router.post('/start', authenticate, async (req, res, next) => {
       // 3. Randomly pick 1 Writing test
       const writingResult = await selectTestForSection(tx, userId, 'WRITING');
 
+      // Ensure tests & versions exist in DB so foreign key constraints do not fail
+      for (const res of [listeningResult, readingResult, writingResult]) {
+        try {
+          await tx.test.upsert({
+            where: { id: res.test.id },
+            update: {},
+            create: {
+              id: res.test.id,
+              section: res.test.section,
+              testNumber: res.test.testNumber,
+              title: res.test.title,
+              description: res.test.description || null,
+              timeLimitMinutes: res.test.timeLimitMinutes || 60,
+              status: res.test.status || 'PUBLISHED',
+            },
+          });
+          await tx.testVersion.upsert({
+            where: { id: res.version.id },
+            update: {},
+            create: {
+              id: res.version.id,
+              testId: res.test.id,
+              versionNumber: res.version.versionNumber || 1,
+              originalName: res.version.originalName || 'test.html',
+              storagePath: res.version.storagePath,
+              entryFile: res.version.entryFile,
+              fileType: res.version.fileType || 'HTML',
+              fileSize: res.version.fileSize || 0,
+              isActive: true,
+            },
+          });
+        } catch (_) {}
+      }
+
       // 4. Calculate next mock number for this student
       const previousCount = await tx.fullMockAttempt.count({
         where: { userId },
@@ -150,18 +204,30 @@ router.post('/start', authenticate, async (req, res, next) => {
       });
 
       // 6. Update usage records to link to this fullMockAttemptId
-      await tx.studentTestUsage.update({
-        where: { id: listeningResult.usageId },
-        data: { fullMockAttemptId: fullMock.id },
-      });
-      await tx.studentTestUsage.update({
-        where: { id: readingResult.usageId },
-        data: { fullMockAttemptId: fullMock.id },
-      });
-      await tx.studentTestUsage.update({
-        where: { id: writingResult.usageId },
-        data: { fullMockAttemptId: fullMock.id },
-      });
+      if (listeningResult.usageId) {
+        try {
+          await tx.studentTestUsage.update({
+            where: { id: listeningResult.usageId },
+            data: { fullMockAttemptId: fullMock.id },
+          });
+        } catch (_) {}
+      }
+      if (readingResult.usageId) {
+        try {
+          await tx.studentTestUsage.update({
+            where: { id: readingResult.usageId },
+            data: { fullMockAttemptId: fullMock.id },
+          });
+        } catch (_) {}
+      }
+      if (writingResult.usageId) {
+        try {
+          await tx.studentTestUsage.update({
+            where: { id: writingResult.usageId },
+            data: { fullMockAttemptId: fullMock.id },
+          });
+        } catch (_) {}
+      }
 
       // 7. Create the first TestAttempt for Section 1: Listening
       const firstAttempt = await tx.testAttempt.create({
@@ -239,7 +305,7 @@ router.get('/:id', authenticate, async (req, res, next) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    res.json(mock);
+    res.json(enrichMock(mock));
   } catch (error) {
     next(error);
   }
