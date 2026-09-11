@@ -26,9 +26,11 @@ if (!fs.existsSync(serverDir)) {
 const serverEnvPath = path.join(serverDir, '.env');
 const dbUrl = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/postgres';
 const jwtSecret = process.env.JWT_SECRET || 'ielts-cdi-supersecret-production-key';
-const envContent = `DATABASE_URL="${dbUrl}"\nJWT_SECRET="${jwtSecret}"\nPORT=3001\nUPLOAD_DIR="./uploads"\n`;
+const port = process.env.PORT || 3001;
+const clientUrl = process.env.CLIENT_URL || '*';
+const envContent = `DATABASE_URL="${dbUrl}"\nJWT_SECRET="${jwtSecret}"\nPORT=${port}\nCLIENT_URL="${clientUrl}"\nUPLOAD_DIR="./uploads"\n`;
 
-if (!fs.existsSync(serverEnvPath) || process.env.DATABASE_URL) {
+if (!fs.existsSync(serverEnvPath) || process.env.DATABASE_URL || process.env.PORT) {
   fs.writeFileSync(serverEnvPath, envContent, 'utf8');
   console.log('Synchronized environment file at:', serverEnvPath);
 }
