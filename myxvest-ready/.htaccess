@@ -1,0 +1,22 @@
+DirectoryIndex index.html index.php
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # 1. API routes -> api/index.php
+  RewriteRule ^api/(.*)$ api/index.php?endpoint=$1 [QSA,L]
+  RewriteRule ^api$ api/index.php?endpoint= [QSA,L]
+
+  # 2. Test Content routes -> test-content.php
+  RewriteRule ^test-content/([^/]+)(/(.*))?$ test-content.php?versionId=$1&path=$3 [QSA,L]
+
+  # 3. Existing files or directories -> serve directly
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # 4. React Single Page App (SPA) fallback
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . index.html [L]
+</IfModule>

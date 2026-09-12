@@ -1,4 +1,30 @@
-const API_URL = '/api';
+export function getBasePath(): string {
+  let p = window.location.pathname;
+  if (p.endsWith('.html') || p.endsWith('.php')) {
+    p = p.substring(0, p.lastIndexOf('/'));
+  }
+  const knownRoutes = ['/login', '/signup', '/reset-password', '/student', '/admin'];
+  for (const route of knownRoutes) {
+    const idx = p.indexOf(route);
+    if (idx !== -1) {
+      p = p.substring(0, idx);
+      break;
+    }
+  }
+  return p.replace(/\/+$/, '');
+}
+
+export function getApiBase(): string {
+  const base = getBasePath();
+  return `${base}/api`;
+}
+
+export function getContentUrl(versionId?: string, entryFile?: string): string {
+  if (!versionId) return '';
+  const base = getBasePath();
+  const file = entryFile || 'index.html';
+  return `${base}/test-content.php?versionId=${encodeURIComponent(versionId)}&path=${encodeURIComponent(file)}`;
+}
 
 export function getToken(): string | null {
   return localStorage.getItem('ielts_auth_token');
@@ -26,10 +52,30 @@ async function request(endpoint: string, options: RequestInit = {}) {
     headers['Content-Type'] = 'application/json';
   }
 
-  const response = await fetch(`${API_URL}${endpoint}`, {
+  const apiBase = getApiBase();
+  let response: Response | null = await fetch(`${apiBase}${endpoint}`, {
     ...options,
     headers,
-  });
+  }).catch(() => null);
+
+  // If request fails or returns 404 (due to disabled .htaccess or mod_rewrite on shared hosting),
+  // fallback directly to api/index.php which is supported by ALL PHP hosts!
+  if (!response || response.status === 404) {
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const fallbackUrl = `${apiBase}/index.php?endpoint=${encodeURIComponent(cleanEndpoint)}`;
+    const fallbackRes = await fetch(fallbackUrl, {
+      ...options,
+      headers,
+    }).catch(() => null);
+
+    if (fallbackRes && fallbackRes.status !== 404) {
+      response = fallbackRes;
+    }
+  }
+
+  if (!response) {
+    throw new Error('Network error: Unable to reach server');
+  }
 
   if (response.status === 401) {
     // If not on login or signup, remove token and dispatch event

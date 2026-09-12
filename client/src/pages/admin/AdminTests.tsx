@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { api } from '../../api/client';
+import { api, getContentUrl } from '../../api/client';
 import {
   Layers,
   PlusCircle,
@@ -604,7 +604,7 @@ export const AdminTests: React.FC = () => {
 
             <div className="flex-1 bg-slate-100 relative">
               <iframe
-                src={`/test-content/${showPreviewModal.activeVersion?.id}/${showPreviewModal.activeVersion?.entryFile}`}
+                src={getContentUrl(showPreviewModal.activeVersion?.id, showPreviewModal.activeVersion?.entryFile)}
                 title="Admin Preview"
                 className="w-full h-full border-0"
                 sandbox="allow-scripts allow-forms allow-modals"

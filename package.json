@@ -5,8 +5,8 @@
   "description": "IELTS Computer-Delivered Mock Testing Platform",
   "scripts": {
     "postinstall": "npm --prefix server install --include=dev",
-    "prisma:generate": "npx prisma generate",
-    "prisma:push": "npx prisma db push",
+    "prisma:generate": "node prepare-env.js && npx prisma generate && npx prisma generate --schema=server/prisma/schema.prisma",
+    "prisma:push": "node prepare-env.js && npx prisma db push --accept-data-loss",
     "build:client": "npm --prefix client install --include=dev && npm --prefix client run build",
     "build": "npm run build:client",
     "start": "node prepare-env.js && node server/src/index.js"

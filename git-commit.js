@@ -58,7 +58,7 @@ async function run() {
     }
   }
 
-  const message = process.argv[2] || 'Switch Prisma to PostgreSQL for Render';
+  const message = process.argv[2] || 'fix: use SQLite and ensure all tests save to tests.json without database dependency';
   console.log('Committing staged files with message:', message);
   const sha = await git.commit({
     fs,

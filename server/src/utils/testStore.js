@@ -2,10 +2,12 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-// Primary path: repository root test.json
+// Primary paths: repository root test.json & tests.json
 const ROOT_TEST_JSON = path.resolve(__dirname, '../../../test.json');
-// Secondary/backup path: server/test.json
+const ROOT_TESTS_JSON = path.resolve(__dirname, '../../../tests.json');
+// Secondary/backup paths: server/test.json & server/tests.json
 const SERVER_TEST_JSON = path.resolve(__dirname, '../../test.json');
+const SERVER_TESTS_JSON = path.resolve(__dirname, '../../tests.json');
 
 function generateId(prefix = '') {
   const rand = crypto.randomBytes(6).toString('hex');
@@ -17,8 +19,14 @@ function getTestJsonPath() {
   if (fs.existsSync(ROOT_TEST_JSON)) {
     return ROOT_TEST_JSON;
   }
+  if (fs.existsSync(ROOT_TESTS_JSON)) {
+    return ROOT_TESTS_JSON;
+  }
   if (fs.existsSync(SERVER_TEST_JSON)) {
     return SERVER_TEST_JSON;
+  }
+  if (fs.existsSync(SERVER_TESTS_JSON)) {
+    return SERVER_TESTS_JSON;
   }
   return ROOT_TEST_JSON;
 }
@@ -36,25 +44,27 @@ function readTests() {
     }
     return [];
   } catch (err) {
-    console.error('Error reading test.json:', err.message);
+    console.error('Error reading test(s).json:', err.message);
     return [];
   }
 }
 
 function writeTests(tests) {
   const content = JSON.stringify(tests, null, 2);
-  // Write to ROOT_TEST_JSON
-  try {
-    fs.writeFileSync(ROOT_TEST_JSON, content, 'utf8');
-  } catch (err) {
-    console.error('Could not write to root test.json:', err.message);
-  }
+  const targets = [
+    ROOT_TEST_JSON,
+    ROOT_TESTS_JSON,
+    SERVER_TEST_JSON,
+    SERVER_TESTS_JSON,
+  ];
 
-  // Also write to SERVER_TEST_JSON for redundancy
-  try {
-    fs.writeFileSync(SERVER_TEST_JSON, content, 'utf8');
-  } catch (err) {
-    // Ignore server test.json error if directory structure differs
+  for (const target of targets) {
+    try {
+      const dir = path.dirname(target);
+      if (fs.existsSync(dir)) {
+        fs.writeFileSync(target, content, 'utf8');
+      }
+    } catch (_) {}
   }
 }
 
@@ -117,6 +127,17 @@ async function safeSyncToPrisma(test, version) {
 
 const testStore = {
   getTestJsonPath,
+
+  async syncAllToPrisma() {
+    try {
+      const tests = readTests();
+      for (const test of tests) {
+        const versions = test.versions || [];
+        const activeVersion = versions.find(v => v.isActive) || versions[0] || null;
+        await safeSyncToPrisma(test, activeVersion);
+      }
+    } catch (_) {}
+  },
 
   getAllTests(filters = {}) {
     let tests = readTests();

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { api } from '../../api/client';
+import { api, getContentUrl } from '../../api/client';
 import { ExamHeader } from '../../components/ExamHeader';
 import { ExamRunner } from '../../components/ExamRunner';
 
@@ -31,8 +31,8 @@ export const TestRunnerPage: React.FC = () => {
   const loadSingleAttempt = useCallback(async (id: string) => {
     try {
       const data = await api.attempts.getById(id);
-      setAttempt(data.attempt);
-      setContentUrl(data.contentUrl);
+      const activeVersion = data.attempt?.testVersion || data.attempt?.test?.versions?.find((v: any) => v.isActive) || data.attempt?.test?.versions?.[0];
+      setContentUrl(getContentUrl(data.attempt?.testVersionId || activeVersion?.id, activeVersion?.entryFile));
       setTestTitle(data.attempt.test?.title || `Test ${data.attempt.test?.testNumber}`);
       setTimeLimit(data.attempt.test?.timeLimitMinutes || (data.attempt.section === 'LISTENING' ? 32 : 60));
     } catch (err: any) {
@@ -69,7 +69,7 @@ export const TestRunnerPage: React.FC = () => {
         test = activeMock.writingTest;
       }
 
-      setContentUrl(`/test-content/${version.id}/${version.entryFile}`);
+      setContentUrl(getContentUrl(version?.id, version?.entryFile));
       setTestTitle(test.title);
       setTimeLimit(test.timeLimitMinutes || (curSection === 'LISTENING' ? 32 : 60));
     } catch (err: any) {

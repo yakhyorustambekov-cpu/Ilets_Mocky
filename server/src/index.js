@@ -149,6 +149,7 @@ app.use(errorHandler);
 
 const server = app.listen(PORT, () => {
   console.log(`IELTS Mock Platform API running on port ${PORT}`);
+  testStore.syncAllToPrisma().catch(() => {});
 });
 
 module.exports = { app, server };

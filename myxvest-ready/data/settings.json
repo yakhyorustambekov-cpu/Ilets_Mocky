@@ -1,0 +1,9 @@
+{
+  "platformName": "IELTS Official CDI Simulation",
+  "allowRegistration": "true",
+  "listeningDurationMinutes": "32",
+  "readingDurationMinutes": "60",
+  "writingDurationMinutes": "60",
+  "strictTimerMode": "true",
+  "requireConfirmationOnNext": "true"
+}

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "usr_admin_001",
+    "email": "admin@ielts.com",
+    "password": "admin123",
+    "firstName": "Examiner",
+    "lastName": "Admin",
+    "candidateNumber": "CDI-ADM001",
+    "role": "ADMIN",
+    "createdAt": "2026-09-08T00:00:00.000Z",
+    "profile": {
+      "targetBand": 9.0,
+      "bio": "Platform Administrator & Chief Examiner"
+    }
+  },
+  {
+    "id": "usr_admin_002",
+    "email": "admin@ielts.local",
+    "password": "admin123",
+    "firstName": "Examiner",
+    "lastName": "Admin",
+    "candidateNumber": "CDI-ADM002",
+    "role": "ADMIN",
+    "createdAt": "2026-09-08T00:00:00.000Z",
+    "profile": {
+      "targetBand": 9.0,
+      "bio": "Platform Administrator & Chief Examiner"
+    }
+  },
+  {
+    "id": "usr_student_001",
+    "email": "student@ielts.com",
+    "password": "student123",
+    "firstName": "Sarah",
+    "lastName": "Jenkins",
+    "candidateNumber": "CDI-849201",
+    "role": "STUDENT",
+    "createdAt": "2026-09-08T00:00:00.000Z",
+    "profile": {
+      "targetBand": 7.5,
+      "examDate": "2026-10-15",
+      "phone": "+1 (555) 382-9910",
+      "bio": "Preparing for IELTS Academic"
+    }
+  },
+  {
+    "id": "usr_student_002",
+    "email": "student@ielts.local",
+    "password": "student123",
+    "firstName": "Sarah",
+    "lastName": "Jenkins",
+    "candidateNumber": "CDI-849202",
+    "role": "STUDENT",
+    "createdAt": "2026-09-08T00:00:00.000Z",
+    "profile": {
+      "targetBand": 7.5,
+      "examDate": "2026-10-15",
+      "phone": "+1 (555) 382-9910",
+      "bio": "Preparing for IELTS Academic"
+    }
+  }
+]
